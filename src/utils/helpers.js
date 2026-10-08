@@ -91,9 +91,15 @@ export function generateDraftOrder(participants) {
 
 // Mapper les noms courts pour les IDs
 export function getParticipantId(name) {
-  return name.toLowerCase().replace(/\s+/g, '_')
-}
+  if (!name) return ''
 
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '_')
+}
 export function getParticipantName(id, participants) {
   const p = participants.find(p => (p.id || p.toLowerCase().replace(/\s+/g, '_')) === id)
   return p?.name || p

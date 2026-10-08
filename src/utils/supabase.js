@@ -205,3 +205,20 @@ export async function submitManualPick(playerId, participantId) {
   return data
 }
 
+
+export async function saveDraftOrders(draftOrders) {
+  const { data, error } = await supabase
+    .from('draft_config')
+    .update({
+      draft_orders: draftOrders,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', 1)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+

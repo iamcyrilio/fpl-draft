@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react'
-import { initDraftConfig, startDraft } from '../utils/supabase'
+import { initDraftConfig, startDraft, saveDraftOrders } from '../utils/supabase'
 import { generateDraftOrder, getParticipantId } from '../utils/helpers'
 
 const DEFAULT_PARTICIPANTS = [
+  'Vince',
   'Cyril',
-  'Marc',
-  'Sophie',
-  'Alex',
-  'Jordan',
-  'Léa',
-  'Thomas',
-  'Nina'
+  'Steve',
+  'Clément',
+  'Jeremy',
+  'Florent',
+  'Bex',
+  'Mathieu'
 ]
 
 const POSITIONS = ['Gardien', 'Défenseur', 'Milieu', 'Attaquant']
@@ -28,16 +28,37 @@ export default function AdminPanel({ onLogout, draftConfig, onReset, onStarted }
 
   // Charger les ordres existants
   useEffect(() => {
-    if (draftConfig?.draft_orders) {
-      setDraftOrders(draftConfig.draft_orders)
-    }
-    if (draftConfig?.participants_list?.length > 0) {
-  setParticipants(
-    draftConfig.participants_list.map(p => p.name || p)
-  )
-} else {
-  setParticipants(DEFAULT_PARTICIPANTS)
-}
+    const expectedIds = DEFAULT_PARTICIPANTS.map(getParticipantId)
+
+const validOrders = POSITIONS.every(position => {
+  const order = draftConfig?.draft_orders?.[position]
+
+  return Array.isArray(order) &&
+    order.length === expectedIds.length &&
+    new Set(order).size === expectedIds.length &&
+    expectedIds.every(id => order.includes(id))
+})
+
+const savedOrders = draftConfig?.draft_orders || {}
+
+const allowedIds = DEFAULT_PARTICIPANTS.map(getParticipantId)
+
+const restoredOrders = {}
+
+POSITIONS.forEach(position => {
+  const saved = savedOrders[position]
+
+  restoredOrders[position] =
+    Array.isArray(saved)
+      ? Array.from({ length: 8 }, (_, index) => {
+          const id = saved[index] || ''
+          return allowedIds.includes(id) ? id : ''
+        })
+      : Array(8).fill('')
+})
+
+setDraftOrders(restoredOrders)
+    setParticipants(DEFAULT_PARTICIPANTS)
   }, [draftConfig])
 
   // Générer les ordres aléatoires
@@ -55,19 +76,51 @@ export default function AdminPanel({ onLogout, draftConfig, onReset, onStarted }
   }
 
   // Mettre à jour l'ordre d'un poste
-  const handleReorderPosition = (position, newOrder) => {
-    setDraftOrders(prev => ({
-      ...prev,
-      [position]: newOrder
-    }))
+  const handleOrderChange = (position, index, participantId) => {
+  setDraftOrders(prev => ({
+    ...prev,
+    [position]: Array.from(
+      { length: participants.length },
+      (_, i) => i === index
+        ? participantId
+        : (prev[position]?.[i] || '')
+    )
+  }))
+}
+
+
+const handleSaveOrders = async () => {
+  setLoading(true)
+  setStatus('')
+
+  try {
+    await saveDraftOrders(draftOrders)
+    setStatus('✅ Ordres sauvegardés dans Supabase !')
+  } catch (error) {
+    console.error('Erreur sauvegarde :', error)
+    setStatus('❌ Impossible de sauvegarder les ordres')
+  } finally {
+    setLoading(false)
   }
+}
 
   // Lancer la draft
   const handleStartDraft = async () => {
-    if (!draftOrders['Gardien']?.length || !draftOrders['Défenseur']?.length) {
-      setStatus('❌ Génère d\'abord les ordres pour tous les postes!')
-      return
-    }
+    const expectedIds = participants.map(getParticipantId)
+
+const allOrdersValid = POSITIONS.every(position => {
+  const order = draftOrders[position]
+
+  return Array.isArray(order) &&
+    order.length === expectedIds.length &&
+    new Set(order).size === expectedIds.length &&
+    expectedIds.every(id => order.includes(id))
+})
+
+if (!allOrdersValid) {
+  setStatus('❌ Les 4 ordres officiels doivent contenir les 8 participants.')
+  return
+}
 
     setLoading(true)
     try {
@@ -141,12 +194,6 @@ await onStarted()
             <div className="bg-white rounded-xl shadow-lg p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-800">🎲 Ordre de Draft</h2>
-                <button
-                  onClick={handleGenerateOrders}
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
-                >
-                  Générer aléatoirement
-                </button>
               </div>
 
               <div className="space-y-4">
@@ -161,21 +208,49 @@ await onStarted()
                       {position}
                     </div>
                     <div className="bg-gray-50 p-4 rounded-lg">
-                      {draftOrders[position]?.length > 0 ? (
-                        <div className="space-y-2">
-                          {draftOrders[position].map((participantId, idx) => {
-                            const participantName = participants.find(p => getParticipantId(p) === participantId) || participantId
-                            return (
-                              <div key={participantId} className="flex items-center gap-3 bg-white p-2 rounded">
-                                <div className="font-bold text-blue-600 min-w-[30px]">#{idx + 1}</div>
-                                <div className="flex-1 font-semibold text-gray-800">{participantName}</div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      ) : (
-                        <div className="text-gray-500 italic">Ordre non généré - Clique sur "Générer aléatoirement"</div>
-                      )}
+                      
+{Array.from({ length: participants.length }, (_, index) => {
+  const selectedId = draftOrders[position]?.[index] || ''
+  const usedIds = (draftOrders[position] || []).filter(Boolean)
+
+  return (
+    <div
+      key={`${position}-${index}`}
+      className="flex items-center gap-3 bg-white p-2 rounded mb-2"
+    >
+      <span className="font-bold text-blue-600 min-w-[30px]">
+        #{index + 1}
+      </span>
+
+      <select
+        value={selectedId}
+        onChange={(e) =>
+          handleOrderChange(position, index, e.target.value)
+        }
+        className="flex-1 border rounded-lg p-2 bg-white"
+      >
+        <option value="">Choisir un participant</option>
+
+        {participants.map(name => {
+          const id = getParticipantId(name)
+
+          return (
+            <option
+              key={id}
+              value={id}
+              disabled={
+                id !== selectedId && usedIds.includes(id)
+              }
+            >
+              {name}
+            </option>
+          )
+        })}
+      </select>
+    </div>
+  )
+})}
+
                     </div>
                   </div>
                 ))}
@@ -183,6 +258,15 @@ await onStarted()
 
               {/* Action Buttons */}
               <div className="mt-8 flex gap-3">
+
+<button
+  onClick={handleSaveOrders}
+  disabled={loading}
+  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-bold"
+>
+  💾 Sauvegarder les ordres
+</button>
+
                 <button
                   onClick={handleStartDraft}
                   disabled={loading}

@@ -12,7 +12,86 @@ export default function App() {
   const [draftState, setDraftState] = useState(null)
   const [draftedPlayers, setDraftedPlayers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [authLoading, setAuthLoading] = useState(true)
   const subscriptionRef = useRef(null)
+
+
+  // Retrouver automatiquement le participant connecté
+  useEffect(() => {
+    let cancelled = false
+
+    async function restoreSession() {
+      try {
+        const { data: { user }, error: authError } =
+          await supabase.auth.getUser()
+
+        if (authError && user) throw authError
+        if (!user) return
+
+        const { data, error } =
+          await supabase.rpc('get_my_fpl_identity')
+
+        if (error) throw error
+
+        const names = {
+          vince: 'Vince',
+          cyril: 'Cyril',
+          steve: 'Steve',
+          clement: 'Clément',
+          jeremy: 'Jeremy',
+          florent: 'Florent',
+          bex: 'Bex',
+          mathieu: 'Mathieu'
+        }
+
+        if (!cancelled && data?.participant_id) {
+          const name = names[data.participant_id]
+
+          if (name) {
+            setCurrentUser(
+              data.is_admin && data.participant_id === 'cyril'
+                ? 'admin'
+                : name
+            )
+          }
+        }
+      } catch (error) {
+        console.error('Restauration de session :', error)
+      } finally {
+        if (!cancelled) setAuthLoading(false)
+      }
+    }
+
+    restoreSession()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Déconnexion et libération du participant
+  const handleLogout = async () => {
+    if (!window.confirm('Te déconnecter et libérer ton prénom ?')) {
+      return
+    }
+
+    try {
+      const { error: leaveError } =
+        await supabase.rpc('leave_fpl_draft')
+
+      if (leaveError) throw leaveError
+
+      const { error: signOutError } =
+        await supabase.auth.signOut()
+
+      if (signOutError) throw signOutError
+
+      setCurrentUser(null)
+    } catch (error) {
+      console.error('Erreur de déconnexion :', error)
+      alert(error.message || 'Impossible de se déconnecter')
+    }
+  }
 
   // Charger la config et l'état initial
   useEffect(() => {
@@ -59,7 +138,7 @@ export default function App() {
     }
   }, [])
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="text-center">
@@ -79,7 +158,7 @@ export default function App() {
   if (currentUser === 'admin' && draftState?.status !== 'in_progress' && draftState?.status !== 'completed') {
   return (
     <AdminPanel
-      onLogout={() => setCurrentUser(null)}
+      onLogout={handleLogout}
       draftConfig={draftConfig}
       onReset={() => resetDraft()}
       onStarted={async () => {
@@ -122,7 +201,7 @@ export default function App() {
       draftState={draftState}
       draftConfig={draftConfig}
       draftedPlayers={draftedPlayers}
-      onLogout={() => setCurrentUser(null)}
+      onLogout={handleLogout}
     />
   )
 }
