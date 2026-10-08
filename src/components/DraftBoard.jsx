@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { updateDraftState, recordDraft, getAllDraftedPlayers, updateDraftState as updateState } from '../utils/supabase'
+import { submitManualPick } from '../utils/supabase'
 import { getNextDraftParticipant, getAvailablePlayers, getBestAvailablePlayer, countParticipantPicks, getParticipantId, getParticipantName } from '../utils/helpers'
 import players from '../data/players.json'
 import PlayerCard from './PlayerCard'
@@ -56,15 +56,7 @@ useEffect(() => {
 
       setTimer(remaining)
 
-      if (
-        remaining === 0 &&
-        isCurrentUser &&
-        !timeoutTriggeredRef.current &&
-        !pickInProgressRef.current
-      ) {
-        timeoutTriggeredRef.current = true
-        handleAutoDraft()
-      }
+      
     }
 
     updateTimer()
@@ -116,23 +108,10 @@ const handleDraftPlayer = async (playerId) => {
   pickInProgressRef.current = true
 
   try {
-    const totalParticipants = draftConfig.participants_list.length
-
-    const picksForPosition = draftedPlayers.filter(
-      p => p.player_position === currentPosition
-    ).length
-
-    const currentRound =
-      Math.floor(picksForPosition / totalParticipants) + 1
-
-    await recordDraft(
-      playerId,
-      player,
-      currentUserIdRef.current,
-      currentRound
-    )
-
-    await moveToNextTurn()
+    await submitManualPick(
+  playerId,
+  currentUserIdRef.current
+)
 
   } catch (error) {
     console.error('Erreur pendant la sélection :', error)
@@ -158,66 +137,6 @@ const handleDraftPlayer = async (playerId) => {
   }
 
   
-const moveToNextTurn = async () => {
-  const picks = await getAllDraftedPlayers()
-  const totalParticipants = draftConfig.participants_list.length
-
-  const picksThisPosition = picks.filter(
-    p => p.player_position === currentPosition
-  ).length
-
-  const required = PICKS_REQUIRED[currentPosition]
-  const totalRequired = totalParticipants * required
-
-  let nextPosition = currentPosition
-  let nextTurn = picksThisPosition
-
-  // Le dernier joueur du poste vient de jouer
-  if (picksThisPosition >= totalRequired) {
-    const index = POSITIONS.indexOf(currentPosition)
-
-    // Tous les postes sont terminés
-    if (index === POSITIONS.length - 1) {
-      await updateDraftState({
-        status: 'completed',
-        current_participant_id: null,
-        time_remaining: 0
-      })
-      return
-    }
-
-    // Passer au poste suivant
-    nextPosition = POSITIONS[index + 1]
-    nextTurn = 0
-  }
-
-  const order = draftConfig.draft_orders[nextPosition]
-
-  if (!order || order.length !== totalParticipants) {
-    throw new Error(
-      `Ordre de draft invalide pour ${nextPosition}`
-    )
-  }
-
-  // Calcul du snake draft
-  const round = Math.floor(nextTurn / totalParticipants)
-  let indexInRound = nextTurn % totalParticipants
-
-  if (round % 2 === 1) {
-    indexInRound = totalParticipants - 1 - indexInRound
-  }
-
-  const nextParticipantId = order[indexInRound]
-
-  // Enregistrer le prochain tour
-  await updateDraftState({
-    current_position: nextPosition,
-    current_turn: nextTurn,
-    current_participant_id: nextParticipantId,
-    time_remaining: 30
-  })
-}
-
 
   // Toggle queue
   const toggleQueue = (playerId) => {
