@@ -70,16 +70,27 @@ export async function getDraftState() {
 }
 
 // Mettre à jour l'état de la draft
+
 export async function updateDraftState(updates) {
   const { data, error } = await supabase
     .from('draft_state')
-    .update({ ...updates, updated_at: new Date() })
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString()
+    })
     .eq('id', 1)
     .select()
+    .single()
 
   if (error) throw error
+
+  if (!data) {
+    throw new Error("État de la draft introuvable.")
+  }
+
   return data
 }
+
 
 // Enregistrer un pick
 export async function recordDraft(playerId, playerData, participantId, round) {
@@ -112,30 +123,38 @@ export async function getAllDraftedPlayers() {
 
 // Subscribe to draft state changes
 export function subscribeToDraftState(callback) {
-  const subscription = supabase
-    .from('draft_state')
-    .on('*', payload => {
-      callback(payload.new)
-    })
+  return supabase
+    .channel('draft-state-changes')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'draft_state'
+      },
+      payload => callback(payload.new)
+    )
     .subscribe()
-
-  return subscription
 }
 
 // Subscribe to drafted players changes
 export function subscribeToDraftedPlayers(callback) {
-  const subscription = supabase
-    .from('drafted_players')
-    .on('*', payload => {
-      callback(payload.new)
-    })
+  return supabase
+    .channel('drafted-players-changes')
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'drafted_players'
+      },
+      payload => callback(payload.new)
+    )
     .subscribe()
-
-  return subscription
 }
 
 // Lancer la draft (admin)
-
+  
 export async function startDraft() {
   const config = await getDraftConfig()
 
@@ -144,18 +163,21 @@ export async function startDraft() {
 
   if (!firstParticipant) {
     throw new Error(
-      'Aucun premier participant défini pour les gardiens'
+      "Impossible de lancer la draft : ordre des gardiens vide."
     )
   }
 
-  return updateDraftState({
+  const result = await updateDraftState({
     status: 'in_progress',
     current_turn: 0,
     current_position: 'Gardien',
     current_participant_id: firstParticipant,
-    time_remaining: 30,
+    time_remaining: 30
   })
+
+  return result
 }
+
 
 
 // Réinitialiser la draft

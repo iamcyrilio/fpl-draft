@@ -52,7 +52,9 @@ export default function App() {
 
     return () => {
       if (subscriptionRef.current) {
-        subscriptionRef.current.forEach(sub => sub?.unsubscribe?.())
+        subscriptionRef.current.forEach(sub => {
+  if (sub) supabase.removeChannel(sub)
+})
       }
     }
   }, [])
