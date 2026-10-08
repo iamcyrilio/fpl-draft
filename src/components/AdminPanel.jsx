@@ -31,9 +31,13 @@ export default function AdminPanel({ onLogout, draftConfig, onReset }) {
     if (draftConfig?.draft_orders) {
       setDraftOrders(draftConfig.draft_orders)
     }
-    if (draftConfig?.participants_list) {
-      setParticipants(draftConfig.participants_list.map(p => p.name || p))
-    }
+    if (draftConfig?.participants_list?.length > 0) {
+  setParticipants(
+    draftConfig.participants_list.map(p => p.name || p)
+  )
+} else {
+  setParticipants(DEFAULT_PARTICIPANTS)
+}
   }, [draftConfig])
 
   // Générer les ordres aléatoires

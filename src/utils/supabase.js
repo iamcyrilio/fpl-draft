@@ -11,11 +11,16 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 // Initialiser la draft config
 
+
 export async function initDraftConfig(participants, draftOrders) {
-  const normalizedParticipants = participants.map(p => ({
-    id: p.id || p.name.toLowerCase().replace(/\s+/g, '_'),
-    name: p.name
-  }))
+  const normalizedParticipants = participants.map(p => {
+    const name = typeof p === 'string' ? p : p.name
+    const id = typeof p === 'string'
+      ? name.toLowerCase().replace(/\s+/g, '_')
+      : p.id
+
+    return { id, name }
+  })
 
   const { error: participantsError } = await supabase
     .from('participants')
@@ -28,7 +33,7 @@ export async function initDraftConfig(participants, draftOrders) {
     .update({
       participants_list: normalizedParticipants,
       draft_orders: draftOrders,
-      updated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     })
     .eq('id', 1)
     .select()
@@ -37,6 +42,7 @@ export async function initDraftConfig(participants, draftOrders) {
   if (error) throw error
   return data
 }
+
 
 
 // Récupérer config actuelle
