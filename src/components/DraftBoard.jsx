@@ -33,6 +33,68 @@ export default function DraftBoard({ currentUser, draftState, draftConfig, draft
   const currentParticipantId = draftState?.current_participant_id
   const isCurrentUser = currentParticipantId === currentUserIdRef.current
   const currentPosition = draftState?.current_position || 'Gardien'
+  
+  // Nombre de sélections avant le prochain pick du joueur
+  const getPicksUntilMyTurn = () => {
+    if (!['in_progress', 'break'].includes(draftState?.status)) {
+      return null
+    }
+
+    const participantId = currentUserIdRef.current
+    const participantCount = draftConfig?.participants_list?.length || 0
+
+    if (!participantCount) return null
+
+    const startingPositionIndex = POSITIONS.indexOf(currentPosition)
+
+    for (
+      let posIndex = startingPositionIndex;
+      posIndex < POSITIONS.length;
+      posIndex++
+    ) {
+      const position = POSITIONS[posIndex]
+      const order = draftConfig?.draft_orders?.[position]
+      const required = PICKS_REQUIRED[position]
+
+      if (!Array.isArray(order) || order.length !== participantCount) {
+        return null
+      }
+
+      const firstTurn = posIndex === startingPositionIndex
+        ? (draftState.current_turn || 0)
+        : 0
+
+      for (let turn = firstTurn; turn < participantCount * required; turn++) {
+        const round = Math.floor(turn / participantCount)
+        let index = turn % participantCount
+
+        if (round % 2 === 1) {
+          index = participantCount - 1 - index
+        }
+
+        if (order[index] === participantId) {
+          const picksRemainingCurrentPosition =
+            participantCount * PICKS_REQUIRED[currentPosition] -
+            (draftState.current_turn || 0)
+
+          return posIndex === startingPositionIndex
+            ? turn - firstTurn
+            : picksRemainingCurrentPosition +
+              POSITIONS.slice(startingPositionIndex + 1, posIndex)
+                .reduce(
+                  (sum, p) => sum + participantCount * PICKS_REQUIRED[p],
+                  0
+                ) +
+              turn
+        }
+      }
+    }
+
+    return null
+  }
+
+  const picksUntilMyTurn = getPicksUntilMyTurn()
+
 useEffect(() => {
   setSelectedPosition(currentPosition)
 }, [currentPosition])
@@ -203,6 +265,21 @@ const handleDraftPlayer = async (playerId) => {
           <div className="flex justify-between items-center mb-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-800">⚽ FPL Draft Fantasy</h1>
+	     
+{draftState?.status === 'in_progress' && picksUntilMyTurn !== null && (
+  <div className="mt-2 text-sm font-bold text-indigo-700">
+    {picksUntilMyTurn === 0
+      ? '🔥 C’est à toi de drafter !'
+      : `⏳ Tu draftes dans ${picksUntilMyTurn} pick${picksUntilMyTurn > 1 ? 's' : ''}`}
+  </div>
+)}
+
+{draftState?.status === 'break' && (
+  <div className="mt-2 text-sm font-bold text-amber-700">
+    ⏸️ Pause entre deux postes
+  </div>
+)}
+
               <p className="text-gray-600">Connecté en tant que: <span className="font-semibold text-blue-600">{currentUser}</span></p>
             </div>
             <button

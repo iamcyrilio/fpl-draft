@@ -149,6 +149,34 @@ export default function App() {
     )
   }
 
+  // Aperçu local de l'écran de fin (sans modifier Supabase)
+  if (
+    import.meta.env.DEV &&
+    currentUser === 'admin' &&
+    new URLSearchParams(window.location.search).get('preview') === 'recap'
+  ) {
+    const testParticipants = [
+      'Vince', 'Cyril', 'Steve', 'Clément',
+      'Jeremy', 'Florent', 'Bex', 'Mathieu'
+    ].map(name => ({
+      name,
+      id: name.normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+    }))
+
+    return (
+      <Recap
+        draftedPlayers={draftedPlayers}
+        participants={testParticipants}
+        onReset={() => {
+          window.location.href = window.location.pathname
+        }}
+      />
+    )
+  }
+
+
   // Pas de user connecté
   if (!currentUser) {
     return <LoginScreen onLogin={setCurrentUser} participants={draftConfig?.participants_list} />
