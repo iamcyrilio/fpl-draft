@@ -15,7 +15,7 @@ const DEFAULT_PARTICIPANTS = [
 
 const POSITIONS = ['Gardien', 'Défenseur', 'Milieu', 'Attaquant']
 
-export default function AdminPanel({ onLogout, draftConfig, onReset }) {
+export default function AdminPanel({ onLogout, draftConfig, onReset, onStarted }) {
   const [participants, setParticipants] = useState(DEFAULT_PARTICIPANTS)
   const [draftOrders, setDraftOrders] = useState({
     'Gardien': [],
@@ -77,8 +77,10 @@ export default function AdminPanel({ onLogout, draftConfig, onReset }) {
       }))
 
       await initDraftConfig(participantList, draftOrders)
-      await startDraft()
-      setStatus('✅ Draft lancée! Les participants peuvent maintenant drafter.')
+
+await startDraft()
+
+await onStarted()
       setTimeout(() => setStatus(''), 3000)
     } catch (error) {
       console.error('Erreur:', error)

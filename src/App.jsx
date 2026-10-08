@@ -76,9 +76,22 @@ export default function App() {
   }
 
   // Admin panel
-  if (currentUser === 'admin') {
-    return <AdminPanel onLogout={() => setCurrentUser(null)} draftConfig={draftConfig} onReset={() => resetDraft()} />
-  }
+  if (currentUser === 'admin' && draftState?.status !== 'in_progress' && draftState?.status !== 'completed') {
+  return (
+    <AdminPanel
+      onLogout={() => setCurrentUser(null)}
+      draftConfig={draftConfig}
+      onReset={() => resetDraft()}
+      onStarted={async () => {
+        const config = await getDraftConfig()
+        const state = await getDraftState()
+
+        setDraftConfig(config)
+        setDraftState(state)
+      }}
+    />
+  )
+}
 
   // Draft terminée
   if (draftState?.status === 'completed') {
@@ -105,7 +118,7 @@ export default function App() {
   // Draft en cours
   return (
     <DraftBoard 
-      currentUser={currentUser}
+      currentUser={currentUser === 'admin' ? 'Cyril' : currentUser}
       draftState={draftState}
       draftConfig={draftConfig}
       draftedPlayers={draftedPlayers}
