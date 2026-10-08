@@ -19,6 +19,7 @@ export default function DraftBoard({ currentUser, draftState, draftConfig, draft
   const [filteredQueue, setFilteredQueue] = useState(false)
   const [timer, setTimer] = useState(30)
   const timerRef = useRef(null)
+  const pickInProgressRef = useRef(false)
   const currentUserIdRef = useRef(getParticipantId(currentUser))
 
   const draftedPlayerIds = draftedPlayers.map(d => d.player_id)
@@ -58,33 +59,61 @@ export default function DraftBoard({ currentUser, draftState, draftConfig, draft
   }, [currentParticipantId])
 
   // Handle player selection
-  const handleDraftPlayer = async (playerId) => {
-    if (!isCurrentUser) return
+  
+const handleDraftPlayer = async (playerId) => {
+  if (pickInProgressRef.current) return
 
-    const player = players.find(p => p.id === playerId)
-    if (!player) return
-if (player.position !== currentPosition) {
-  alert(`Tu dois sélectionner un joueur au poste : ${currentPosition}`)
-  return
+  if (!isCurrentUser || draftState?.status !== 'in_progress') {
+    return
+  }
+
+  const player = players.find(p => p.id === playerId)
+
+  if (!player) return
+
+  if (player.position !== currentPosition) {
+    alert(`Tu dois sélectionner un joueur au poste : ${currentPosition}`)
+    return
+  }
+
+  if (draftedPlayers.some(p => String(p.player_id) === String(playerId))) {
+    alert('Ce joueur a déjà été sélectionné.')
+    return
+  }
+
+  pickInProgressRef.current = true
+
+  try {
+    const totalParticipants = draftConfig.participants_list.length
+
+    const picksForPosition = draftedPlayers.filter(
+      p => p.player_position === currentPosition
+    ).length
+
+    const currentRound =
+      Math.floor(picksForPosition / totalParticipants) + 1
+
+    await recordDraft(
+      playerId,
+      player,
+      currentUserIdRef.current,
+      currentRound
+    )
+
+    await moveToNextTurn()
+
+  } catch (error) {
+    console.error('Erreur pendant la sélection :', error)
+
+    alert(
+      'Impossible de valider ce choix : ' +
+      (error.message || 'Erreur inconnue')
+    )
+  } finally {
+    pickInProgressRef.current = false
+  }
 }
 
-    try {
-      // Record the draft
-      const picksForPosition = draftedPlayers.filter(
-  p => p.player_position === currentPosition
-).length
-
-const currentRound = Math.floor(
-  picksForPosition / draftConfig.participants_list.length
-) + 1
-      await recordDraft(playerId, player, currentUserIdRef.current, currentRound)
-
-      // Move to next player's turn
-      await moveToNextTurn()
-    } catch (error) {
-      console.error('Erreur draft:', error)
-    }
-  }
 
   const handleAutoDraft = async () => {
     if (!isCurrentUser) return
