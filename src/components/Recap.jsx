@@ -20,6 +20,55 @@ export default function Recap({ draftedPlayers, participants, onReset }) {
     exportRecapAsJSON(recap, 'fpl-draft-recap.json')
   }
 
+const handleExportCSV = () => {
+  const columns = [
+    'Pick', 'Manager', 'Joueur',
+    'Poste', 'Club', 'Cote', 'Manche'
+  ]
+
+  const escapeCSV = value => {
+    const text = String(value ?? '')
+    const safe = /^[=+\-@\t\r]/.test(text) ? "'" + text : text
+    return `"${safe.replace(/"/g, '""')}"`
+  }
+
+  const rows = [...draftedPlayers]
+    .sort((a, b) =>
+      new Date(a.created_at) - new Date(b.created_at) ||
+      a.id - b.id
+    )
+    .map((pick, index) => [
+      index + 1,
+      participants.find(p => p.id === pick.drafted_by)?.name
+        || pick.drafted_by,
+      pick.player_name,
+      pick.player_position,
+      pick.player_club,
+      pick.player_cote,
+      pick.round
+    ])
+
+  const content = [columns, ...rows]
+    .map(row => row.map(escapeCSV).join(';'))
+    .join('\r\n')
+
+  const blob = new Blob(
+    ['\uFEFF' + content],
+    { type: 'text/csv;charset=utf-8;' }
+  )
+
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+
+  link.href = url
+  link.download = 'fpl-draft-resultats.csv'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-100 p-6">
       <div className="max-w-6xl mx-auto">
@@ -38,6 +87,15 @@ export default function Recap({ draftedPlayers, participants, onReset }) {
             <Download size={20} />
             Télécharger le JSON
           </button>
+
+<button
+  onClick={handleExportCSV}
+  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-bold transition-colors"
+>
+  <Download size={20} />
+  📥 Télécharger pour Excel (CSV)
+</button>
+
           <button
             onClick={onReset}
             className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-colors"

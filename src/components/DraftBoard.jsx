@@ -325,6 +325,84 @@ const handleDraftPlayer = async (playerId) => {
               </div>
             </div>
 
+	   
+            {/* Live draft history */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-lg text-gray-800">
+                  📋 Picks en direct
+                </h3>
+                <span className="text-xs font-bold text-green-600">
+                  🔴 LIVE
+                </span>
+              </div>
+
+              <p className="text-xs text-gray-500 mb-4">
+                {draftedPlayers.length} / 144 sélections
+              </p>
+
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {[...draftedPlayers]
+                  .sort((a, b) =>
+                    new Date(b.created_at) - new Date(a.created_at) ||
+                    b.id - a.id
+                  )
+                  .map((pick, index, sortedPicks) => {
+                    const participant = draftConfig.participants_list.find(
+                      p => (p.id || getParticipantId(p.name || p)) === pick.drafted_by
+                    )
+
+                    const managerName =
+                      participant?.name || participant || pick.drafted_by
+
+                    const pickNumber = sortedPicks.length - index
+
+                    return (
+                      <div
+                        key={pick.id}
+                        className={`rounded-lg p-3 border ${
+                          index === 0
+                            ? 'bg-green-50 border-green-300'
+                            : 'bg-gray-50 border-gray-100'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="font-bold text-blue-600 text-sm min-w-[35px]">
+                            #{pickNumber}
+                          </span>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-gray-800 text-sm">
+                              {managerName}
+                            </div>
+
+                            <div className="text-sm text-gray-700">
+                              {pick.player_name}
+                            </div>
+
+                            <div className="text-xs text-gray-500 mt-1">
+                              {pick.player_club} · {pick.player_position}
+                            </div>
+                          </div>
+
+                          {index === 0 && (
+                            <span className="text-xs font-bold text-green-700">
+                              NEW
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                {draftedPlayers.length === 0 && (
+                  <p className="text-sm text-gray-500 text-center py-6">
+                    Aucun joueur sélectionné pour le moment.
+                  </p>
+                )}
+              </div>
+            </div>
+
             {/* Leaderboard */}
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h3 className="font-bold text-lg text-gray-800 mb-4">📊 Progression</h3>
