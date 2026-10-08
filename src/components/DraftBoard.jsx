@@ -20,6 +20,7 @@ export default function DraftBoard({ currentUser, draftState, draftConfig, draft
   const [timer, setTimer] = useState(30)
   const timerRef = useRef(null)
   const pickInProgressRef = useRef(false)
+  const timeoutTriggeredRef = useRef(false)
   const currentUserIdRef = useRef(getParticipantId(currentUser))
 
   const draftedPlayerIds = draftedPlayers.map(d => d.player_id)
@@ -35,31 +36,59 @@ useEffect(() => {
   setSelectedPosition(currentPosition)
 }, [currentPosition])
 
-  // Timer logic
+  
+  // Chronomètre partagé via Supabase
   useEffect(() => {
-    if (!isCurrentUser || draftState?.status !== 'in_progress') {
-      clearInterval(timerRef.current)
+    const deadline = draftState?.turn_deadline
+
+    if (draftState?.status !== 'in_progress' || !deadline) {
+      setTimer(30)
       return
     }
 
-    timerRef.current = setInterval(() => {
-      setTimer(prev => {
-        if (prev <= 1) {
-          // Auto-draft
-          handleAutoDraft()
-          return 30
-        }
-        return prev - 1
-      })
-    }, 1000)
+    const updateTimer = () => {
+      const remaining = Math.max(
+        0,
+        Math.ceil(
+          (new Date(deadline).getTime() - Date.now()) / 1000
+        )
+      )
 
-    return () => clearInterval(timerRef.current)
-  }, [isCurrentUser, draftState?.status, selectedPosition])
+      setTimer(remaining)
 
-  // Reset timer when turn changes
+      if (
+        remaining === 0 &&
+        isCurrentUser &&
+        !timeoutTriggeredRef.current &&
+        !pickInProgressRef.current
+      ) {
+        timeoutTriggeredRef.current = true
+        handleAutoDraft()
+      }
+    }
+
+    updateTimer()
+
+    const interval = setInterval(updateTimer, 250)
+
+    return () => clearInterval(interval)
+  }, [
+    draftState?.turn_deadline,
+    draftState?.status,
+    draftState?.current_turn,
+    currentParticipantId,
+    currentPosition,
+    isCurrentUser
+  ])
+
+  // Réarmer l'auto-draft à chaque nouveau tour
   useEffect(() => {
-    setTimer(30)
-  }, [currentParticipantId])
+    timeoutTriggeredRef.current = false
+  }, [
+    draftState?.turn_deadline,
+    draftState?.current_turn,
+    currentPosition
+  ])
 
   // Handle player selection
   
