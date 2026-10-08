@@ -63,10 +63,20 @@ export default function DraftBoard({ currentUser, draftState, draftConfig, draft
 
     const player = players.find(p => p.id === playerId)
     if (!player) return
+if (player.position !== currentPosition) {
+  alert(`Tu dois sélectionner un joueur au poste : ${currentPosition}`)
+  return
+}
 
     try {
       // Record the draft
-      const currentRound = Math.floor(draftedPlayers.length / (draftConfig.participants_list.length * 4)) + 1
+      const picksForPosition = draftedPlayers.filter(
+  p => p.player_position === currentPosition
+).length
+
+const currentRound = Math.floor(
+  picksForPosition / draftConfig.participants_list.length
+) + 1
       await recordDraft(playerId, player, currentUserIdRef.current, currentRound)
 
       // Move to next player's turn
@@ -86,54 +96,67 @@ export default function DraftBoard({ currentUser, draftState, draftConfig, draft
     }
   }
 
-  const moveToNextTurn = async () => {
-    const config = draftConfig
-    const currentOrder = config.draft_orders[currentPosition]
-    if (!currentOrder) return
+  
+const moveToNextTurn = async () => {
+  const picks = await getAllDraftedPlayers()
+  const totalParticipants = draftConfig.participants_list.length
 
-    const draftedPlayers = await getAllDraftedPlayers()
-    const totalPicks = draftedPlayers.length + 1
+  const picksThisPosition = picks.filter(
+    p => p.player_position === currentPosition
+  ).length
 
-    // Calculate next position and participant
-    let nextPosition = currentPosition
-    let nextTurn = totalPicks
+  const required = PICKS_REQUIRED[currentPosition]
+  const totalRequired = totalParticipants * required
 
-    // Check if all picks for current position are done
-    const picksThisPosition = draftedPlayers.filter(d => d.player_position === currentPosition).length
-    const totalParticipants = config.participants_list.length
-    const picksPerPosition = totalParticipants * PICKS_REQUIRED[currentPosition]
+  let nextPosition = currentPosition
+  let nextTurn = picksThisPosition
 
-    let positionIndex = POSITIONS.indexOf(currentPosition)
+  // Le dernier joueur du poste vient de jouer
+  if (picksThisPosition >= totalRequired) {
+    const index = POSITIONS.indexOf(currentPosition)
 
-    if (picksThisPosition + 1 >= picksPerPosition) {
-      // Move to next position
-      positionIndex++
-      if (positionIndex >= POSITIONS.length) {
-        // Draft terminée
-        await updateState({ status: 'completed' })
-        return
-      }
-      nextPosition = POSITIONS[positionIndex]
-      nextTurn = 0
+    // Tous les postes sont terminés
+    if (index === POSITIONS.length - 1) {
+      await updateDraftState({
+        status: 'completed',
+        current_participant_id: null,
+        time_remaining: 0
+      })
+      return
     }
 
-    // Get next participant
-    const positionOrder = config.draft_orders[nextPosition]
-    const round = Math.floor(nextTurn / totalParticipants)
-    let indexInRound = nextTurn % totalParticipants
-
-    // Snake draft
-    if (round % 2 === 1) {
-      indexInRound = totalParticipants - 1 - indexInRound
-    }
-
-    const nextParticipantId = positionOrder[indexInRound]
-
-    await updateDraftState({
-      current_position: nextPosition,
-      current_participant_id: nextParticipantId
-    })
+    // Passer au poste suivant
+    nextPosition = POSITIONS[index + 1]
+    nextTurn = 0
   }
+
+  const order = draftConfig.draft_orders[nextPosition]
+
+  if (!order || order.length !== totalParticipants) {
+    throw new Error(
+      `Ordre de draft invalide pour ${nextPosition}`
+    )
+  }
+
+  // Calcul du snake draft
+  const round = Math.floor(nextTurn / totalParticipants)
+  let indexInRound = nextTurn % totalParticipants
+
+  if (round % 2 === 1) {
+    indexInRound = totalParticipants - 1 - indexInRound
+  }
+
+  const nextParticipantId = order[indexInRound]
+
+  // Enregistrer le prochain tour
+  await updateDraftState({
+    current_position: nextPosition,
+    current_turn: nextTurn,
+    current_participant_id: nextParticipantId,
+    time_remaining: 30
+  })
+}
+
 
   // Toggle queue
   const toggleQueue = (playerId) => {
