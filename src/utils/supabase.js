@@ -193,3 +193,15 @@ export async function resetDraft() {
     time_remaining: 30,
   })
 }
+
+
+export async function submitManualPick(playerId, participantId) {
+  const { data, error } = await supabase.rpc('fpl_manual_pick', {
+    p_player_id: playerId,
+    p_participant_id: participantId
+  })
+
+  if (error) throw error
+  return data
+}
+
