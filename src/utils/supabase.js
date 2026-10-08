@@ -10,23 +10,34 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 // Initialiser la draft config
+
 export async function initDraftConfig(participants, draftOrders) {
+  const normalizedParticipants = participants.map(p => ({
+    id: p.id || p.name.toLowerCase().replace(/\s+/g, '_'),
+    name: p.name
+  }))
+
+  const { error: participantsError } = await supabase
+    .from('participants')
+    .upsert(normalizedParticipants, { onConflict: 'id' })
+
+  if (participantsError) throw participantsError
+
   const { data, error } = await supabase
     .from('draft_config')
     .update({
-      participants_list: participants.map((name, idx) => ({ 
-        id: name.toLowerCase().replace(/\s+/g, '_'), 
-        name 
-      })),
+      participants_list: normalizedParticipants,
       draft_orders: draftOrders,
-      updated_at: new Date(),
+      updated_at: new Date().toISOString(),
     })
     .eq('id', 1)
     .select()
+    .single()
 
   if (error) throw error
   return data
 }
+
 
 // Récupérer config actuelle
 export async function getDraftConfig() {
@@ -118,14 +129,28 @@ export function subscribeToDraftedPlayers(callback) {
 }
 
 // Lancer la draft (admin)
+
 export async function startDraft() {
+  const config = await getDraftConfig()
+
+  const firstParticipant =
+    config.draft_orders?.['Gardien']?.[0]
+
+  if (!firstParticipant) {
+    throw new Error(
+      'Aucun premier participant défini pour les gardiens'
+    )
+  }
+
   return updateDraftState({
     status: 'in_progress',
     current_turn: 0,
     current_position: 'Gardien',
+    current_participant_id: firstParticipant,
     time_remaining: 30,
   })
 }
+
 
 // Réinitialiser la draft
 export async function resetDraft() {
