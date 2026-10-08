@@ -155,7 +155,10 @@ export default function App() {
   }
 
   // Admin panel
-  if (currentUser === 'admin' && draftState?.status !== 'in_progress' && draftState?.status !== 'completed') {
+  if (
+  currentUser === 'admin' &&
+  draftState?.status === 'waiting'
+) {
   return (
     <AdminPanel
       onLogout={handleLogout}
@@ -198,6 +201,7 @@ export default function App() {
   return (
     <DraftBoard 
       currentUser={currentUser === 'admin' ? 'Cyril' : currentUser}
+      isAdmin={currentUser === 'admin'}
       draftState={draftState}
       draftConfig={draftConfig}
       draftedPlayers={draftedPlayers}

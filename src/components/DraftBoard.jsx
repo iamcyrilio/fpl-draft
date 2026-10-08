@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { launchFplDraft } from '../utils/supabase'
 import { submitManualPick } from '../utils/supabase'
 import { getNextDraftParticipant, getAvailablePlayers, getBestAvailablePlayer, countParticipantPicks, getParticipantId, getParticipantName } from '../utils/helpers'
 import players from '../data/players.json'
@@ -13,7 +14,7 @@ const PICKS_REQUIRED = {
   'Attaquant': 4
 }
 
-export default function DraftBoard({ currentUser, draftState, draftConfig, draftedPlayers, onLogout }) {
+export default function DraftBoard({ currentUser, draftState, draftConfig, draftedPlayers, onLogout, isAdmin }) {
   const [selectedPosition, setSelectedPosition] = useState('Gardien')
   const [queue, setQueue] = useState([])
   const [filteredQueue, setFilteredQueue] = useState(false)
@@ -41,10 +42,10 @@ useEffect(() => {
   useEffect(() => {
     const deadline = draftState?.turn_deadline
 
-    if (draftState?.status !== 'in_progress' || !deadline) {
-      setTimer(30)
-      return
-    }
+    if (!['in_progress', 'break'].includes(draftState?.status) || !deadline) {
+  setTimer(30)
+  return
+}
 
     const updateTimer = () => {
       const remaining = Math.max(
@@ -155,6 +156,47 @@ const handleDraftPlayer = async (playerId) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+
+{draftState?.status === 'ready' && (
+  <div className="bg-blue-100 border-b border-blue-300 p-6 text-center">
+    <h2 className="text-2xl font-bold text-blue-900 mb-2">
+      ⚽ Préparation de la draft
+    </h2>
+
+    <p className="text-blue-800 mb-4">
+      Explorez les joueurs et préparez vos sélections.
+      Le chronomètre n'a pas encore démarré.
+    </p>
+
+    {isAdmin && (
+      <button
+        onClick={async () => {
+          try {
+            await launchFplDraft()
+          } catch (error) {
+            alert(error.message || 'Erreur de lancement')
+          }
+        }}
+        className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-xl text-xl font-bold"
+      >
+        🚀 LET'S GO !
+      </button>
+    )}
+  </div>
+)}
+
+{draftState?.status === 'break' && (
+  <div className="bg-amber-100 border-b border-amber-300 p-6 text-center">
+    <h2 className="text-2xl font-bold text-amber-900">
+      ⏸️ Pause — prochain poste : {currentPosition}
+    </h2>
+
+    <p className="text-lg font-semibold text-amber-800 mt-2">
+      Reprise dans {timer ?? 30} secondes
+    </p>
+  </div>
+)}
+
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-4">

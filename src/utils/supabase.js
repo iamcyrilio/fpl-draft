@@ -168,7 +168,7 @@ export async function startDraft() {
   }
 
   const result = await updateDraftState({
-    status: 'in_progress',
+    status: 'ready',
     current_turn: 0,
     current_position: 'Gardien',
     current_participant_id: firstParticipant,
@@ -221,4 +221,10 @@ export async function saveDraftOrders(draftOrders) {
   return data
 }
 
+export async function launchFplDraft() {
+  const { data, error } = await supabase.rpc('launch_fpl_draft')
+
+  if (error) throw error
+  return data
+}
 
