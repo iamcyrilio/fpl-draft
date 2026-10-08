@@ -31,6 +31,9 @@ export default function DraftBoard({ currentUser, draftState, draftConfig, draft
   const currentParticipantId = draftState?.current_participant_id
   const isCurrentUser = currentParticipantId === currentUserIdRef.current
   const currentPosition = draftState?.current_position || 'Gardien'
+useEffect(() => {
+  setSelectedPosition(currentPosition)
+}, [currentPosition])
 
   // Timer logic
   useEffect(() => {
