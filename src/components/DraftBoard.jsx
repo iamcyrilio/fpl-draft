@@ -21,6 +21,8 @@ const PICKS_REQUIRED = {
 
 export default function DraftBoard({ currentUser, draftState, draftConfig, draftedPlayers, onLogout, isAdmin }) {
   const [selectedPosition, setSelectedPosition] = useState('Gardien')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedClub, setSelectedClub] = useState('Tous')
   const [queue, setQueue] = useState([])
   const [filteredQueue, setFilteredQueue] = useState(false)
   const [timer, setTimer] = useState(30)
@@ -61,10 +63,35 @@ export default function DraftBoard({ currentUser, draftState, draftConfig, draft
 
 
   const draftedPlayerIds = draftedPlayers.map(d => d.player_id)
-  const availablePlayersForPosition = getAvailablePlayers(selectedPosition, draftedPlayerIds)
-  const displayedPlayers = filteredQueue && queue.length > 0
-    ? availablePlayersForPosition.filter(p => queue.includes(p.id))
-    : availablePlayersForPosition
+  
+const availablePlayersForPosition = getAvailablePlayers(
+  selectedPosition,
+  draftedPlayerIds
+)
+
+const clubs = [...new Set(
+  players.map(p => p.club).filter(Boolean)
+)].sort((a, b) => a.localeCompare(b))
+
+const normalizeSearch = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+
+const displayedPlayers = availablePlayersForPosition.filter(player => {
+  const matchesQueue = !filteredQueue || queue.includes(player.id)
+
+  const matchesName = normalizeSearch(player.name).includes(
+    normalizeSearch(searchTerm.trim())
+  )
+
+  const matchesClub =
+    selectedClub === 'Tous' || player.club === selectedClub
+
+  return matchesQueue && matchesName && matchesClub
+})
+
 
   const currentParticipantId = draftState?.current_participant_id
   const isCurrentUser = currentParticipantId === currentUserIdRef.current
@@ -492,6 +519,34 @@ const handleDraftPlayer = async (playerId) => {
 
             {/* Players Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+	      
+<div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+  <input
+    type="search"
+    value={searchTerm}
+    onChange={(e) => setSearchTerm(e.target.value)}
+    placeholder="🔎 Rechercher un joueur..."
+    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+  />
+
+  <select
+    value={selectedClub}
+    onChange={(e) => setSelectedClub(e.target.value)}
+    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+  >
+    <option value="Tous">Tous les clubs</option>
+    {clubs.map(club => (
+      <option key={club} value={club}>
+        {club}
+      </option>
+    ))}
+  </select>
+</div>
+
+<p className="text-xs text-gray-500 mb-3">
+  {displayedPlayers.length} joueur(s) disponible(s)
+</p>
+
               {displayedPlayers.map(player => (
                 <PlayerCard
                   key={player.id}
