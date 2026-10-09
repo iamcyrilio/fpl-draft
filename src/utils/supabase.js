@@ -228,3 +228,42 @@ export async function launchFplDraft() {
   return data
 }
 
+
+export async function getMyDraftQueue(participantId) {
+  const { data, error } = await supabase
+    .from('fpl_draft_queues')
+    .select('player_ids')
+    .eq('participant_id', participantId)
+    .maybeSingle()
+
+  if (error) throw error
+
+  if (!data) {
+    console.warn(
+      `Queue introuvable ou inaccessible pour ${participantId}`
+    )
+    return []
+  }
+
+  return data.player_ids ?? []
+}
+
+export async function saveMyDraftQueue(participantId, playerIds) {
+  const { error } = await supabase
+    .from('fpl_draft_queues')
+    .upsert({
+      participant_id: participantId,
+      player_ids: playerIds,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'participant_id' })
+
+  if (error) throw error
+}
+
+
+export async function forceAutoPick() {
+  const { data, error } = await supabase.rpc('fpl_force_auto_pick')
+
+  if (error) throw error
+  return data
+}

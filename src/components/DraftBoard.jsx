@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { launchFplDraft } from '../utils/supabase'
-import { submitManualPick } from '../utils/supabase'
+import {
+  launchFplDraft,
+  submitManualPick,
+  getMyDraftQueue,
+  saveMyDraftQueue,
+  forceAutoPick
+} from '../utils/supabase'
 import { getNextDraftParticipant, getAvailablePlayers, getBestAvailablePlayer, countParticipantPicks, getParticipantId, getParticipantName } from '../utils/helpers'
 import players from '../data/players.json'
 import PlayerCard from './PlayerCard'
@@ -23,6 +28,37 @@ export default function DraftBoard({ currentUser, draftState, draftConfig, draft
   const pickInProgressRef = useRef(false)
   const timeoutTriggeredRef = useRef(false)
   const currentUserIdRef = useRef(getParticipantId(currentUser))
+  
+  const queueLoadedRef = useRef(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadQueue() {
+      try {
+        const savedQueue = await getMyDraftQueue(
+          currentUserIdRef.current
+        )
+
+        if (!cancelled) {
+          setQueue(savedQueue)
+          queueLoadedRef.current = true
+        }
+      } catch (error) {
+  console.error('Erreur de chargement Queue :', error)
+  if (!cancelled) {
+    alert('Erreur Supabase Queue : ' + error.message)
+  }
+}
+    }
+
+    loadQueue()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
 
   const draftedPlayerIds = draftedPlayers.map(d => d.player_id)
   const availablePlayersForPosition = getAvailablePlayers(selectedPosition, draftedPlayerIds)
@@ -145,6 +181,38 @@ useEffect(() => {
     currentPosition
   ])
 
+
+  // Auto-draft immédiat réservé à l'administrateur
+  const handleForceAutoPick = async () => {
+    if (!isAdmin || draftState?.status !== 'in_progress') return
+    if (pickInProgressRef.current) return
+
+    const participantName =
+      draftConfig?.participants_list?.find(
+        p => p.id === currentParticipantId
+      )?.name || currentParticipantId
+
+    const confirmed = window.confirm(
+      `Forcer l'auto-draft de ${participantName} ?\n\n` +
+      `Le premier joueur disponible de sa Queue sera choisi ` +
+      `au poste ${currentPosition}. Sinon, le meilleur joueur disponible.`
+    )
+
+    if (!confirmed) return
+
+    pickInProgressRef.current = true
+
+    try {
+      await forceAutoPick()
+    } catch (error) {
+      console.error('Erreur auto-draft forcé :', error)
+      alert(error.message || "Impossible de forcer l'auto-draft")
+    } finally {
+      pickInProgressRef.current = false
+    }
+  }
+
+
   // Handle player selection
   
 const handleDraftPlayer = async (playerId) => {
@@ -202,15 +270,70 @@ const handleDraftPlayer = async (playerId) => {
   
 
   // Toggle queue
-  const toggleQueue = (playerId) => {
-    setQueue(prev => {
-      if (prev.includes(playerId)) {
-        return prev.filter(id => id !== playerId)
-      } else {
-        return [...prev, playerId]
-      }
-    })
+  
+  // Ajouter ou retirer un joueur de la Queue et sauvegarder
+  const toggleQueue = async (playerId) => {
+    if (!queueLoadedRef.current) {
+      alert('Chargement de ta Queue en cours.')
+      return
+    }
+
+    const nextQueue = queue.includes(playerId)
+      ? queue.filter(id => id !== playerId)
+      : [...queue, playerId]
+
+    try {
+      await saveMyDraftQueue(
+        currentUserIdRef.current,
+        nextQueue
+      )
+
+      setQueue(nextQueue)
+    } catch (error) {
+      console.error('Erreur sauvegarde Queue :', error)
+      alert('Impossible de sauvegarder ta Queue.')
+    }
   }
+
+  
+  // Modifier l'ordre de priorité de la Queue
+  const moveQueuePlayer = async (playerId, direction) => {
+    if (!queueLoadedRef.current) return
+
+    const currentIndex = queue.indexOf(playerId)
+    const targetIndex = currentIndex + direction
+
+    if (
+      currentIndex === -1 ||
+      targetIndex < 0 ||
+      targetIndex >= queue.length
+    ) {
+      return
+    }
+
+    const updatedQueue = [...queue]
+
+    ;[
+      updatedQueue[currentIndex],
+      updatedQueue[targetIndex]
+    ] = [
+      updatedQueue[targetIndex],
+      updatedQueue[currentIndex]
+    ]
+
+    try {
+      await saveMyDraftQueue(
+        currentUserIdRef.current,
+        updatedQueue
+      )
+
+      setQueue(updatedQueue)
+    } catch (error) {
+      console.error('Erreur réorganisation Queue :', error)
+      alert('Impossible de modifier les priorités.')
+    }
+  }
+
 
   if (!draftConfig || !draftState) {
     return <div className="flex items-center justify-center h-screen">Chargement...</div>
@@ -289,6 +412,21 @@ const handleDraftPlayer = async (playerId) => {
               Déconnexion
             </button>
           </div>
+	 
+{isAdmin && draftState?.status === 'in_progress' && (
+  <div className="mb-4 flex justify-end">
+    <button
+      onClick={handleForceAutoPick}
+      className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-3 rounded-lg font-bold shadow-md"
+    >
+      ⚡ Forcer l'auto-draft de {
+        draftConfig?.participants_list?.find(
+          p => p.id === currentParticipantId
+        )?.name || currentParticipantId
+      }
+    </button>
+  </div>
+)}
 
           {/* Stats bar */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -377,6 +515,79 @@ const handleDraftPlayer = async (playerId) => {
 
           {/* Sidebar */}
           <div className="space-y-6">
+	    
+{/* Queue prioritaire */}
+<div className="bg-white rounded-xl shadow-lg p-6">
+  <h3 className="font-bold text-lg text-gray-800 mb-2">
+    ⭐ Ma Queue prioritaire
+  </h3>
+
+  <p className="text-xs text-gray-500 mb-4">
+    L'auto-draft choisira le premier joueur disponible
+    de cette liste au poste en cours.
+  </p>
+
+  <div className="space-y-2 max-h-96 overflow-y-auto">
+    {queue.map((playerId, index) => {
+      const player = players.find(
+        p => p.id === playerId
+      )
+
+      if (!player) return null
+
+      const alreadyDrafted = draftedPlayerIds.includes(playerId)
+
+      return (
+        <div
+          key={playerId}
+          className={`flex items-center gap-2 rounded-lg p-2 ${
+            alreadyDrafted ? 'bg-gray-100 opacity-60' : 'bg-blue-50'
+          }`}
+        >
+          <span className="font-bold text-blue-600 text-sm w-6">
+            {index + 1}.
+          </span>
+
+          <div className="flex-1 min-w-0">
+            <div className={`font-semibold text-sm ${
+              alreadyDrafted ? 'line-through' : ''
+            }`}>
+              {player.name}
+            </div>
+            <div className="text-xs text-gray-500">
+              {player.position} · {player.club}
+            </div>
+          </div>
+
+          <button
+            onClick={() => moveQueuePlayer(playerId, -1)}
+            disabled={index === 0}
+            className="px-2 py-1 bg-white border rounded disabled:opacity-30"
+            title="Monter dans la Queue"
+          >
+            ↑
+          </button>
+
+          <button
+            onClick={() => moveQueuePlayer(playerId, 1)}
+            disabled={index === queue.length - 1}
+            className="px-2 py-1 bg-white border rounded disabled:opacity-30"
+            title="Descendre dans la Queue"
+          >
+            ↓
+          </button>
+        </div>
+      )
+    })}
+
+    {queue.length === 0 && (
+      <p className="text-sm text-gray-500 text-center py-4">
+        Aucun joueur dans ta Queue.
+      </p>
+    )}
+  </div>
+</div>
+
             {/* Current user team */}
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h3 className="font-bold text-lg text-gray-800 mb-4">👥 Ton équipe</h3>
